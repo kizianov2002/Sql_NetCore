@@ -1,0 +1,220 @@
+ConStr = Data Source=10.33.0.211;Initial Catalog=potok;Integrated Security=False;User ID=SA;Password=123QWEasd;Connect Timeout=30;Encrypt=False;TrustServerCertificate=True;ApplicationIntent=ReadWrite;MultiSubnetFailover=False
+
+LogLevel  = 0
+LogToDisk = 0
+
+MarkSaveID = 1
+MarkLockID = 1
+MarkIDsSpans = 1
+MarkStatistic = 1
+MarkExceptions = 1
+
+UseMultyProc = 1
+UseMultyComp = 1
+ProcCount = 3
+ProcHubName = A
+
+IDsProcSpanLim = 50000
+IDsBathSize = 5000
+IDsProcSpanLim_today = 2000
+IDsBathSize_today = 200
+IDsSaveStep = 10
+
+UseCycle = 1
+ForseToday = 0
+RecognizeMode = 2
+RecognizeBorder = 90
+
+UsePauses = 1
+OneFilePause_ms = 50
+IDsBathPause_ms = 2000
+IDsSpanPause_ms = 5000
+TodayTimeLag_ms = 500000
+NoFilesPause_ms = 500000
+
+UseDarkFilter = 1
+Latitude_deg       = 56
+OffsetDayTime_min  = 30
+OffsetTimeZone_min = 0
+
+DirIn  = C:\TEMP\In
+DirOut = C:\TEMP\Out
+DirIn_recreate  = 1
+DirOut_recreate = 1
+
+FilesToDisk = 0
+SaveOps_SaveRecs   = 1
+SaveOps_SaveUnrecs = 0
+SaveOps_RemoveOld  = 1
+SaveOps_RenameNew  = 1
+
+SaveOps_MarkRect   = 1
+SaveOps_TypeRect   = 1
+
+OutName_FileName = 0
+OutName_DateTime = 0
+OutName_Name     = 0
+OutName_Mark     = 0
+OutName_Modl     = 0
+OutName_Genr     = 0
+OutName_MarkProp = 0
+OutName_Type     = 1
+OutName_Side     = 1
+OutName_TypeProp = 1
+OutName_FileNam2 = 1
+
+
+SqlTestIDs  = 
+(
+SELECT count(info.id)		 
+  FROM targetinfo info
+ WHERE info.datefix > '##dateTimeFrom##'
+   and info.datefix <= '##dateTimeTo##'
+   and info.id > ##lastId##
+)
+
+
+SqlReadIDs  = 
+(
+SELECT TOP (##idsBathSize##) 
+       info.id as TargetInfoID,
+       info.DateFix			 
+  FROM targetinfo info
+ WHERE info.datefix > '##dateTimeFrom##'
+   and info.datefix <= '##dateTimeTo##'
+   and info.id > ##lastId##
+ ORDER BY info.id asc
+)
+
+
+SqlReadImage = 
+(
+DECLARE @RC int
+DECLARE @id bigint
+EXECUTE @RC = [dbo].[SelectTargetImage] 
+        @id = ##ID##;
+)
+
+
+SqlTestRecoImage = 
+(
+SELECT Top(1) [TargetInfoID]
+  FROM [dbo].[TSInfo_Reco]
+ WHERE [TargetInfoID] = ##ID##;
+)
+
+
+SqlSaveImageRes = 
+(
+INSERT INTO [dbo].[TSInfo_Reco]
+       ([TargetInfoID]
+       ,[Brand]
+       ,[BrandProb]
+       ,[Type]
+       ,[TypeProb])			 
+VALUES (##ID##
+       ,##brand##
+       ,##brandProb##
+       ,##type##
+       ,##typeProb##);
+)
+
+
+
+PARAMS_SqlRead =
+(
+SELECT TOP(1) Value 
+  FROM [dbo].[TSInfo_RecoStatus] 
+ WHERE Name = ##Name##; 
+)
+
+
+PARAMS_SqlSave =
+(
+DELETE " +
+  FROM [dbo].[TSInfo_RecoStatus] 
+ WHERE [Name] = '##Name##' ;
+
+INSERT INTO [dbo].[TSInfo_RecoStatus]
+       ( [Name] 
+       , [Value] )
+VALUES ( '##Name##'
+       , '##Value##' );
+)
+
+
+PARAMS_SqlUpdate =
+(
+UPDATE [dbo].[TSInfo_RecoStatus] 
+   SET [Value] = '##Value##'
+ WHERE [Name] = '##Name##'; 
+)
+
+
+PARAMS_SqlRename =
+(
+UPDATE [dbo].[TSInfo_RecoStatus] 
+   SET [Name] = '##OldName##'
+ WHERE [Name] = '##NewName##'; 
+)
+
+
+PARAMS_SqlIncrement =
+(
+ UPDATE [dbo].[TSInfo_RecoStatus] 
+    SET [Value] = CAST(Data.Cnt As varchar)
+   FROM ( SELECT (TRY_CONVERT(INT, Tab.Value) + '##IncVal##') AS Cnt
+            FROM [dbo].[TSInfo_RecoStatus] Tab
+           WHERE [Name] = '##Name##'
+        ) AS Data
+ WHERE [Name] = '##Name##'; 
+)
+
+
+PARAMS_SqlDelete =
+(
+DELETE " +
+  FROM [dbo].[TSInfo_RecoStatus] 
+ WHERE [Name] = '##Name##' ;
+)
+
+
+PARAMS_SqlCleanTemp =
+(
+UPDATE [dbo].[TSInfo_RecoStatus]
+   SET [Name] = REPLACE([Name], 'XXXYYYZZZSSS - ', '');
+)
+
+
+PARAMS_SqlIDsSpans =
+(
+ SELECT qSpan.[Id], 
+        qSpan.[Code], 
+        qFrom.[Value] as [IdFrom], 
+        qTo.[Value] as [IdTo], 
+        qDTFrom.[Value] as [DTFrom], 
+        qDTTo.[Value] as [DTTo], 
+        qSpan.[Value] as [OpenDT] 
+  FROM
+     ( SELECT [Id], REPLACE([Name], '_Span', '') as [Code], [Name], [Value]   FROM[dbo].[TSInfo_RecoStatus] 
+        WHERE [Name] LIKE '%_Span' ##AddWhere## ) qSpan 
+  LEFT JOIN  ( SELECT REPLACE([Name], '_ID_From', '') as [Code], [Name], [Value]   FROM[dbo].[TSInfo_RecoStatus] 
+        WHERE [Name] LIKE '%_ID_From' ) qFrom 
+    ON (qSpan.[Code] = qFrom.[Code]) 
+  LEFT JOIN  ( SELECT REPLACE([Name], '_ID_To', '') as [Code], [Name], [Value]   FROM[dbo].[TSInfo_RecoStatus]  
+        WHERE [Name] LIKE '%_ID_To' ) qTo 
+    ON (qFrom.[Code] = qTo.[Code])
+  LEFT JOIN  ( SELECT REPLACE([Name], '_DateTime_From', '') as [Code], [Name], [Value]   FROM[dbo].[TSInfo_RecoStatus] 
+        WHERE [Name] LIKE '%_DateTime_From' ) qDTFrom 
+    ON (qFrom.[Code] = qDTFrom.[Code]) 
+  LEFT JOIN  ( SELECT REPLACE([Name], '_DateTime_To', '') as [Code], [Name], [Value]   FROM[dbo].[TSInfo_RecoStatus] 
+        WHERE [Name] LIKE '%_DateTime_To' ) qDTTo 
+    ON (qFrom.[Code] = qDTTo.[Code]) 
+ WHERE qSpan.[Code] is not NULL  
+   AND qFrom.[Value] is not NULL  
+   AND qTo.[Value] is not NULL  
+   AND qDTFrom.[Value] is not NULL  
+   AND qDTTo.[Value] is not NULL  
+   AND qSpan.[Value] is not NULL  
+ ORDER BY [DTFrom], [IdTo]; 
+)
